@@ -6,6 +6,7 @@ from app.utils.openai_chat_compat import (
     create_chat_completion,
     extract_chat_completion_text,
     is_gpt5_family,
+    uses_completion_tokens_api,
 )
 
 
@@ -45,6 +46,29 @@ def test_gpt5_uses_completion_token_limit_without_temperature():
             "model": "gpt-5-2025-08-07",
             "messages": messages,
             "max_completion_tokens": 123,
+            "response_format": {"type": "json_object"},
+        }
+    ]
+
+
+def test_gpt6_uses_completion_token_limit_without_temperature():
+    recorder = CompletionRecorder()
+    messages = [{"role": "user", "content": "hello"}]
+
+    create_chat_completion(
+        client_for(recorder),
+        model="gpt-6-luna",
+        messages=messages,
+        temperature=0.3,
+        max_tokens=64,
+        response_format={"type": "json_object"},
+    )
+
+    assert recorder.calls == [
+        {
+            "model": "gpt-6-luna",
+            "messages": messages,
+            "max_completion_tokens": 64,
             "response_format": {"type": "json_object"},
         }
     ]
@@ -102,6 +126,21 @@ def test_provider_error_is_propagated_without_guessing_or_retrying():
 )
 def test_gpt5_family_detection(model, expected):
     assert is_gpt5_family(model) is expected
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("gpt-5", True),
+        ("gpt-6-luna", True),
+        ("gpt-4.1", False),
+        ("gpt-4o-mini", False),
+        ("my-gpt-6-proxy", False),
+        (None, False),
+    ],
+)
+def test_completion_token_api_detection(model, expected):
+    assert uses_completion_tokens_api(model) is expected
 
 
 def test_extracts_text_from_supported_content_shapes():
