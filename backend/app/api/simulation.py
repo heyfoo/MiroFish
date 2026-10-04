@@ -496,7 +496,11 @@ def prepare_simulation():
         
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
-        parallel_profile_count = data.get('parallel_profile_count', 5)
+        # 默认并行数 5；配置了 LLM_MAX_CONCURRENCY（如本地 LLM）时以其为上限
+        default_parallel_profiles = 5
+        if Config.LLM_MAX_CONCURRENCY:
+            default_parallel_profiles = min(default_parallel_profiles, Config.LLM_MAX_CONCURRENCY)
+        parallel_profile_count = data.get('parallel_profile_count', default_parallel_profiles)
         
         # ========== 同步获取实体数量（在后台任务启动前） ==========
         # 这样前端在调用prepare后立即就能获取到预期Agent总数
@@ -1973,30 +1977,37 @@ def get_run_status_detail(simulation_id: str):
                 }
             })
         
-        # 获取完整的动作列表
+        # 动作日志只读一次，再在内存里按平台和轮次拆分。
+        # 前端每几秒轮询一次，重复读四遍 jsonl 会把低配机器的磁盘和 CPU 占满。
         all_actions = SimulationRunner.get_all_actions(
             simulation_id=simulation_id,
             platform=platform_filter
         )
-        
-        # 分平台获取动作
-        twitter_actions = SimulationRunner.get_all_actions(
-            simulation_id=simulation_id,
-            platform="twitter"
-        ) if not platform_filter or platform_filter == "twitter" else []
-        
-        reddit_actions = SimulationRunner.get_all_actions(
-            simulation_id=simulation_id,
-            platform="reddit"
-        ) if not platform_filter or platform_filter == "reddit" else []
-        
-        # 获取当前轮次的动作（recent_actions 只展示最新一轮）
+
+        twitter_actions = [
+            action for action in all_actions if action.platform == "twitter"
+        ] if not platform_filter or platform_filter == "twitter" else []
+
+        reddit_actions = [
+            action for action in all_actions if action.platform == "reddit"
+        ] if not platform_filter or platform_filter == "reddit" else []
+
         current_round = run_state.current_round
-        recent_actions = SimulationRunner.get_all_actions(
-            simulation_id=simulation_id,
-            platform=platform_filter,
-            round_num=current_round
-        ) if current_round > 0 else []
+        recent_actions = [
+            action for action in all_actions if action.round_num == current_round
+        ] if current_round > 0 else []
+
+        # tail 只保留最新的若干条（列表已按时间倒序），供实时时间线使用
+        tail_raw = request.args.get('tail')
+        if tail_raw:
+            try:
+                tail = int(tail_raw)
+            except (TypeError, ValueError):
+                tail = 0
+            if tail > 0:
+                all_actions = all_actions[:tail]
+                twitter_actions = twitter_actions[:tail]
+                reddit_actions = reddit_actions[:tail]
         
         # 获取基础状态信息
         result = run_state.to_dict()

@@ -107,7 +107,10 @@ export const getRunStatus = (simulationId) => {
  * @param {string} simulationId
  */
 export const getRunStatusDetail = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/run-status/detail`)
+  // tail 只取最近的动作。实时时间线不需要把整份历史反复拉下来。
+  return service.get(`/api/simulation/${simulationId}/run-status/detail`, {
+    params: { tail: 300 }
+  })
 }
 
 /**

@@ -194,7 +194,7 @@
     "stopException": "Stop error: {error}",
     "allPlatformsCompleted": "All platform simulations have ended",
     "simCompleted": "Simulation completed",
-    "graphRealtimeRefresh": "Graph real-time refresh enabled (30s)",
+    "graphRealtimeRefresh": "Graph real-time refresh enabled (60s)",
     "graphRefreshStopped": "Graph real-time refresh stopped",
     "preparingGoBack": "Preparing to return to Step 2, closing simulation...",
     "closingSimEnv": "Closing simulation environment...",
@@ -205,7 +205,8 @@
     "forceStopSuccess": "Simulation force stopped",
     "forceStopFailed": "Force stop failed: {error}",
     "startGenerateReportBtn": "Generate Report",
-    "generatingReportBtn": "Starting..."
+    "generatingReportBtn": "Starting...",
+    "showingRecentActions": "Showing the latest {shown} actions ({hidden} earlier actions hidden to keep this page responsive)"
   },
   "step4": {
     "generatingSection": "Generating {title}...",
@@ -472,7 +473,7 @@
     "loadException": "Load error: {error}",
     "graphDataLoadSuccess": "Graph data loaded successfully",
     "graphLoadFailed": "Graph load failed: {error}",
-    "graphRealtimeRefreshStart": "Graph real-time refresh enabled (30s)",
+    "graphRealtimeRefreshStart": "Graph real-time refresh enabled (60s)",
     "graphRealtimeRefreshStop": "Graph real-time refresh stopped",
     "simRunViewInit": "SimulationRunView initialized",
     "customRounds": "Custom simulation rounds: {rounds}",

@@ -255,7 +255,15 @@ const loadGraph = async (graphId) => {
   try {
     const res = await getGraphData(graphId)
     if (res.success) {
-      graphData.value = res.data
+      const next = res.data
+      const prev = graphData.value
+      const sameShape = prev
+        && (prev.nodes?.length || 0) === (next?.nodes?.length || 0)
+        && (prev.edges?.length || 0) === (next?.edges?.length || 0)
+      // 模拟过程中图谱没长大就不要整图重排
+      if (!(isSimulating.value && sameShape)) {
+        graphData.value = next
+      }
       if (!isSimulating.value) {
         addLog(t('log.graphDataLoadSuccess'))
       }
@@ -279,8 +287,8 @@ let graphRefreshTimer = null
 const startGraphRefresh = () => {
   if (graphRefreshTimer) return
   addLog(t('log.graphRealtimeRefreshStart'))
-  // 立即刷新一次，然后每30秒刷新
-  graphRefreshTimer = setInterval(refreshGraph, 30000)
+  // 立即刷新一次，然后每60秒刷新
+  graphRefreshTimer = setInterval(refreshGraph, 60000)
 }
 
 const stopGraphRefresh = () => {

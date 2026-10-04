@@ -194,7 +194,7 @@
     "stopException": "停止异常: {error}",
     "allPlatformsCompleted": "检测到所有平台模拟已结束",
     "simCompleted": "模拟已完成",
-    "graphRealtimeRefresh": "开启图谱实时刷新 (30s)",
+    "graphRealtimeRefresh": "开启图谱实时刷新 (60s)",
     "graphRefreshStopped": "停止图谱实时刷新",
     "preparingGoBack": "准备返回 Step 2，正在关闭模拟...",
     "closingSimEnv": "正在关闭模拟环境...",
@@ -205,7 +205,8 @@
     "forceStopSuccess": "模拟已强制停止",
     "forceStopFailed": "强制停止失败: {error}",
     "startGenerateReportBtn": "开始生成结果报告",
-    "generatingReportBtn": "启动中..."
+    "generatingReportBtn": "启动中...",
+    "showingRecentActions": "仅显示最近 {shown} 条动作（更早的 {hidden} 条已隐藏，避免页面卡死）"
   },
   "step4": {
     "generatingSection": "正在生成{title}...",
@@ -472,7 +473,7 @@
     "loadException": "加载异常: {error}",
     "graphDataLoadSuccess": "图谱数据加载成功",
     "graphLoadFailed": "图谱加载失败: {error}",
-    "graphRealtimeRefreshStart": "开启图谱实时刷新 (30s)",
+    "graphRealtimeRefreshStart": "开启图谱实时刷新 (60s)",
     "graphRealtimeRefreshStop": "停止图谱实时刷新",
     "simRunViewInit": "SimulationRunView 初始化",
     "customRounds": "自定义模拟轮数: {rounds}",

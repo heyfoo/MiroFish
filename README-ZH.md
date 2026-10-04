@@ -127,6 +127,30 @@ LLM_MODEL_NAME=qwen-plus
 ZEP_API_KEY=your_zep_api_key
 ```
 
+#### 8GB 内存，或完全不花钱跑
+
+以前慢和崩溃，主要是两件事：Twitter 每一轮都会把约 1GB 的推荐模型载入 PyTorch，并且每个平台最多同时发出 30 个 LLM 请求。现在这两项都改成了小机器也能跑完的默认值。
+
+**免费本地模型（Ollama）。** 安装 [Ollama](https://ollama.com)，拉取一个小模型，把 `.env` 指过去即可。LLM 本身不需要付费 API。图谱仍然存在 Zep Cloud，每月免费额度够短模拟使用。
+
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://127.0.0.1:11434/v1
+LLM_MODEL_NAME=qwen2.5:3b
+```
+
+```bash
+ollama pull qwen2.5:3b
+```
+
+8GB 内存优先用 3B 量化模型，而不是 7B 及以上。检测到本机地址后，LLM 并发会自动降到 2，请求超时也会放宽，因为 CPU 上的模型同时处理不了 30 个请求。想自己控制并发就设置 `LLM_MAX_CONCURRENCY`。
+
+**先把模拟规模缩小。** 界面里第一次把轮数限制在 40 以内。Twitter 和 Reddit 一起开会让内存和模型调用翻倍，机器已经在用交换分区时先只开一个平台。
+
+**推荐模型。** Twitter 现在默认用 OASIS 的 `random` 推荐（纯 Python，不下载模型）。只有内存宽裕、并且能访问 HuggingFace 时，才设置 `OASIS_TWITTER_RECSYS=twhin-bert`。`twitter` 是折中选项（约 90MB 的 MiniLM）。
+
+**安装体积。** 在 Linux 上 `uv sync` 会安装 CPU 版 PyTorch，不再带上这个项目用不到的数 GB NVIDIA 库。
+
 #### 2. 安装依赖
 
 ```bash

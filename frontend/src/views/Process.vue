@@ -870,7 +870,13 @@ const loadGraph = async (graphId) => {
 }
 
 // 渲染图谱 (D3.js)
+let currentSimulation = null
+
 const renderGraph = () => {
+  if (currentSimulation) {
+    currentSimulation.stop()
+    currentSimulation = null
+  }
   if (!graphSvg.value || !graphData.value) {
     console.log('Cannot render: svg or data missing')
     return
@@ -962,6 +968,7 @@ const renderGraph = () => {
     .force('collision', d3.forceCollide().radius(40))
     .force('x', d3.forceX(width / 2).strength(0.05))
     .force('y', d3.forceY(height / 2).strength(0.05))
+  currentSimulation = simulation
   
   // 添加缩放功能
   const g = svg.append('g')
@@ -1095,6 +1102,10 @@ onMounted(() => {
 onUnmounted(() => {
   stopPolling()
   stopGraphPolling()
+  if (currentSimulation) {
+    currentSimulation.stop()
+    currentSimulation = null
+  }
 })
 </script>
 

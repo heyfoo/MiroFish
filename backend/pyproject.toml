@@ -23,6 +23,9 @@ dependencies = [
     # OASIS 社交媒体模拟
     "camel-oasis==0.2.5",
     "camel-ai==0.2.78",
+    # torch 本身是 camel-oasis 的间接依赖；显式声明是为了让下方 [tool.uv.sources]
+    # 能在 Linux 上把它替换为 CPU 版本（uv 的 sources 只对直接依赖生效）
+    "torch>=2.0.0,<2.10",
     
     # 文件处理
     "PyMuPDF>=1.24.0",
@@ -41,6 +44,20 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pipreqs>=0.5.0",
 ]
+
+# Linux 平台默认从 PyPI 安装的 torch 是 CUDA 版本（约 900MB，另加 3GB+ 的 nvidia-* 库）。
+# MiroFish 只在 OASIS 可选推荐系统中用到 torch（且默认已关闭），这里改用 CPU 版本：
+# 安装体积从 ~5GB 降到 ~1GB，`import torch` 更快、常驻内存更低，Docker 镜像也更小。
+# 需要 GPU 推荐系统的用户可删除下面两段配置后重新执行 `uv lock`。
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
