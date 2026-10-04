@@ -156,6 +156,13 @@ def init_logging_for_simulation(simulation_dir: str):
 
 
 from action_logger import SimulationLogManager, PlatformActionLogger
+from simulation_runtime import (
+    apply_local_llm_defaults,
+    describe_runtime,
+    get_llm_concurrency,
+    make_reddit_env,
+    make_twitter_env,
+)
 
 try:
     from camel.models import ModelFactory
@@ -981,13 +988,43 @@ def _get_comment_info(
     return None
 
 
-def create_model(config: Dict[str, Any], use_boost: bool = False):
+def resolve_llm_settings(config: Dict[str, Any], use_boost: bool = False) -> Tuple[str, str, str, str]:
     """
-    创建LLM模型
-    
+    解析当前平台应使用的 LLM 配置。
+
     支持双 LLM 配置，用于并行模拟时提速：
     - 通用配置：LLM_API_KEY, LLM_BASE_URL, LLM_MODEL_NAME
     - 加速配置（可选）：LLM_BOOST_API_KEY, LLM_BOOST_BASE_URL, LLM_BOOST_MODEL_NAME
+
+    Returns:
+        (api_key, base_url, model_name, config_label)
+    """
+    boost_api_key = os.environ.get("LLM_BOOST_API_KEY", "")
+    boost_base_url = os.environ.get("LLM_BOOST_BASE_URL", "")
+    boost_model = os.environ.get("LLM_BOOST_MODEL_NAME", "")
+    has_boost_config = bool(boost_api_key)
+
+    if use_boost and has_boost_config:
+        llm_api_key = boost_api_key
+        llm_base_url = boost_base_url
+        llm_model = boost_model or os.environ.get("LLM_MODEL_NAME", "")
+        config_label = "[加速LLM]"
+    else:
+        llm_api_key = os.environ.get("LLM_API_KEY", "")
+        llm_base_url = os.environ.get("LLM_BASE_URL", "")
+        llm_model = os.environ.get("LLM_MODEL_NAME", "")
+        config_label = "[通用LLM]"
+
+    # 如果 .env 中没有模型名，则使用 config 作为备用
+    if not llm_model:
+        llm_model = config.get("llm_model", "gpt-4o-mini")
+
+    return llm_api_key, llm_base_url, llm_model, config_label
+
+
+def create_model(config: Dict[str, Any], use_boost: bool = False):
+    """
+    创建LLM模型
     
     如果配置了加速 LLM，并行模拟时可以让不同平台使用不同的 API 服务商，提高并发能力。
     
@@ -995,29 +1032,7 @@ def create_model(config: Dict[str, Any], use_boost: bool = False):
         config: 模拟配置字典
         use_boost: 是否使用加速 LLM 配置（如果可用）
     """
-    # 检查是否有加速配置
-    boost_api_key = os.environ.get("LLM_BOOST_API_KEY", "")
-    boost_base_url = os.environ.get("LLM_BOOST_BASE_URL", "")
-    boost_model = os.environ.get("LLM_BOOST_MODEL_NAME", "")
-    has_boost_config = bool(boost_api_key)
-    
-    # 根据参数和配置情况选择使用哪个 LLM
-    if use_boost and has_boost_config:
-        # 使用加速配置
-        llm_api_key = boost_api_key
-        llm_base_url = boost_base_url
-        llm_model = boost_model or os.environ.get("LLM_MODEL_NAME", "")
-        config_label = "[加速LLM]"
-    else:
-        # 使用通用配置
-        llm_api_key = os.environ.get("LLM_API_KEY", "")
-        llm_base_url = os.environ.get("LLM_BASE_URL", "")
-        llm_model = os.environ.get("LLM_MODEL_NAME", "")
-        config_label = "[通用LLM]"
-    
-    # 如果 .env 中没有模型名，则使用 config 作为备用
-    if not llm_model:
-        llm_model = config.get("llm_model", "gpt-4o-mini")
+    llm_api_key, llm_base_url, llm_model, config_label = resolve_llm_settings(config, use_boost)
     
     # 设置 camel-ai 所需的环境变量
     if llm_api_key:
@@ -1028,6 +1043,10 @@ def create_model(config: Dict[str, Any], use_boost: bool = False):
     
     if llm_base_url:
         os.environ["OPENAI_API_BASE_URL"] = llm_base_url
+    
+    # 本地 LLM（Ollama / LM Studio 等）生成较慢，放宽 camel-ai 的请求超时
+    if apply_local_llm_defaults(llm_base_url):
+        print(f"{config_label} 检测到本地 LLM，MODEL_TIMEOUT 默认放宽为 {os.environ['MODEL_TIMEOUT']} 秒")
     
     print(f"{config_label} model={llm_model}, base_url={llm_base_url[:40] if llm_base_url else '默认'}...")
     
@@ -1152,11 +1171,14 @@ async def run_twitter_simulation(
     if os.path.exists(db_path):
         os.remove(db_path)
     
-    result.env = oasis.make(
+    # 并发上限与推荐系统类型由 simulation_runtime 统一管理（可通过环境变量调节）
+    _, llm_base_url, _, _ = resolve_llm_settings(config, use_boost=False)
+    llm_concurrency = get_llm_concurrency(llm_base_url)
+    log_info(f"运行时配置: {describe_runtime(llm_base_url, platform='twitter')}")
+    result.env = make_twitter_env(
         agent_graph=result.agent_graph,
-        platform=oasis.DefaultPlatformType.TWITTER,
-        database_path=db_path,
-        semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+        db_path=db_path,
+        semaphore=llm_concurrency,
     )
     
     await result.env.reset()
@@ -1343,11 +1365,13 @@ async def run_reddit_simulation(
     if os.path.exists(db_path):
         os.remove(db_path)
     
-    result.env = oasis.make(
+    _, llm_base_url, _, _ = resolve_llm_settings(config, use_boost=True)
+    llm_concurrency = get_llm_concurrency(llm_base_url)
+    log_info(f"运行时配置: {describe_runtime(llm_base_url, platform='reddit')}")
+    result.env = make_reddit_env(
         agent_graph=result.agent_graph,
-        platform=oasis.DefaultPlatformType.REDDIT,
-        database_path=db_path,
-        semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+        db_path=db_path,
+        semaphore=llm_concurrency,
     )
     
     await result.env.reset()

@@ -3,6 +3,10 @@
 # ===========================================
 # Python 3.11+ required
 # Install: pip install -r requirements.txt
+#
+# Prefer `uv sync` (see pyproject.toml). On Linux that installs the CPU
+# build of PyTorch. A plain pip install pulls the CUDA build of torch
+# through camel-oasis, which is several GB and is not needed here.
 # ===========================================
 
 # ============= 核心框架 =============

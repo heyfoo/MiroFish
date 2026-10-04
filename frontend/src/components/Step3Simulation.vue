@@ -126,6 +126,9 @@
       <!-- Timeline Feed -->
       <div class="timeline-feed">
         <div class="timeline-axis"></div>
+        <p v-if="hiddenActionCount > 0" class="timeline-trimmed">
+          {{ $t('step3.showingRecentActions', { shown: chronologicalActions.length, hidden: hiddenActionCount }) }}
+        </p>
         
         <TransitionGroup name="timeline-item">
           <div 
@@ -326,10 +329,22 @@ const allActions = ref([]) // 所有动作（增量累积）
 const actionIds = ref(new Set()) // 用于去重的动作ID集合
 const scrollContainer = ref(null)
 
+// 时间线只保留最近的动作。全量渲染会让 DOM 随模拟无限增长，8GB 机器上直接卡死。
+const MAX_VISIBLE_ACTIONS = 200
+const MAX_RETAINED_ACTIONS = 400
+
 // Computed
+const byTimestamp = (a, b) => String(a.timestamp).localeCompare(String(b.timestamp))
+
 // 按时间顺序显示动作（最新的在最后面，即底部）
 const chronologicalActions = computed(() => {
-  return allActions.value
+  const actions = allActions.value
+  if (actions.length <= MAX_VISIBLE_ACTIONS) return actions
+  return [...actions].sort(byTimestamp).slice(-MAX_VISIBLE_ACTIONS)
+})
+
+const hiddenActionCount = computed(() => {
+  return Math.max(0, allActions.value.length - chronologicalActions.value.length)
 })
 
 // 各平台动作计数
@@ -583,6 +598,13 @@ const fetchRunStatusDetail = async () => {
           newActionsAdded++
         }
       })
+
+      if (allActions.value.length > MAX_RETAINED_ACTIONS) {
+        // 服务端按时间倒序返回，新动作又追加在末尾，不能靠数组头尾判断新旧。
+        allActions.value = [...allActions.value]
+          .sort(byTimestamp)
+          .slice(-MAX_RETAINED_ACTIONS)
+      }
       
       // 不自动滚动，让用户自由查看时间轴
       // 新动作会在底部追加
@@ -956,6 +978,12 @@ onUnmounted(() => {
 .breakdown-item.reddit { color: #000; }
 
 /* --- Timeline Feed --- */
+.timeline-trimmed {
+  margin: 0 0 8px 28px;
+  font-size: 12px;
+  color: #888;
+}
+
 .timeline-feed {
   padding: 24px 0;
   position: relative;

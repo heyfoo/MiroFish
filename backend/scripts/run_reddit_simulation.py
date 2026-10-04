@@ -115,6 +115,13 @@ def setup_oasis_logging(log_dir: str):
         logger.propagate = False
 
 
+from simulation_runtime import (
+    apply_local_llm_defaults,
+    describe_runtime,
+    get_llm_concurrency,
+    make_reddit_env,
+)
+
 try:
     from camel.models import ModelFactory
     from camel.types import ModelPlatformType
@@ -415,6 +422,7 @@ class RedditSimulationRunner:
         self.simulation_dir = os.path.dirname(config_path)
         self.wait_for_commands = wait_for_commands
         self.env = None
+        self.llm_base_url = ""
         self.agent_graph = None
         self.ipc_handler = None
         
@@ -458,6 +466,11 @@ class RedditSimulationRunner:
         
         if llm_base_url:
             os.environ["OPENAI_API_BASE_URL"] = llm_base_url
+        
+        # 本地 LLM（Ollama / LM Studio 等）生成较慢，放宽 camel-ai 的请求超时
+        if apply_local_llm_defaults(llm_base_url):
+            print(f"检测到本地 LLM，MODEL_TIMEOUT 默认放宽为 {os.environ['MODEL_TIMEOUT']} 秒")
+        self.llm_base_url = llm_base_url
         
         print(f"LLM配置: model={llm_model}, base_url={llm_base_url[:40] if llm_base_url else '默认'}...")
         
@@ -574,11 +587,13 @@ class RedditSimulationRunner:
             print(f"已删除旧数据库: {db_path}")
         
         print("创建OASIS环境...")
-        self.env = oasis.make(
+        # 并发上限与推荐系统类型由 simulation_runtime 统一管理（可通过环境变量调节）
+        llm_concurrency = get_llm_concurrency(self.llm_base_url)
+        print(f"运行时配置: {describe_runtime(self.llm_base_url, platform='reddit')}")
+        self.env = make_reddit_env(
             agent_graph=self.agent_graph,
-            platform=oasis.DefaultPlatformType.REDDIT,
-            database_path=db_path,
-            semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+            db_path=db_path,
+            semaphore=llm_concurrency,
         )
         
         await self.env.reset()

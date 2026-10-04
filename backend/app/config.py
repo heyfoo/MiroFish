@@ -14,6 +14,17 @@ else:
     load_dotenv(override=True)
 
 
+def _optional_positive_int(raw: str | None) -> int | None:
+    """解析可选的正整数环境变量；缺失或非法时返回 None。"""
+    if raw is None or not raw.strip():
+        return None
+    try:
+        value = int(raw.strip())
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
 class Config:
     """Flask配置类"""
     
@@ -28,6 +39,11 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
+    
+    # LLM 并发上限（可选）
+    # 限制后端并行调用 LLM 的数量（人设生成等），以及模拟子进程中每个平台的并发请求数。
+    # 本地 LLM（Ollama / LM Studio）通常只能同时处理 1~4 个请求，建议设为 1~4。
+    LLM_MAX_CONCURRENCY = _optional_positive_int(os.environ.get('LLM_MAX_CONCURRENCY'))
     
     # Zep配置
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')

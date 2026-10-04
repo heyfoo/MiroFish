@@ -227,7 +227,7 @@
     <!-- 显示边标签开关 -->
     <div v-if="graphData" class="edge-labels-toggle">
       <label class="toggle-switch">
-        <input type="checkbox" v-model="showEdgeLabels" />
+        <input type="checkbox" v-model="showEdgeLabels" @change="edgeLabelsTouched = true" />
         <span class="slider"></span>
       </label>
       <span class="toggle-label">Show Edge Labels</span>
@@ -252,6 +252,7 @@ const graphContainer = ref(null)
 const graphSvg = ref(null)
 const selectedItem = ref(null)
 const showEdgeLabels = ref(true) // 默认显示边标签
+const edgeLabelsTouched = ref(false) // 用户手动切换后不再自动关闭
 const expandedSelfLoops = ref(new Set()) // 展开的自环项
 const showSimulationFinishedHint = ref(false) // 模拟结束后的提示
 const wasSimulating = ref(false) // 追踪之前是否在模拟中
@@ -324,6 +325,26 @@ const closeDetailPanel = () => {
 let currentSimulation = null
 let linkLabelsRef = null
 let linkLabelBgRef = null
+let labelMeasureCtx = null
+
+// 边数超过该值时自动隐藏标签。每条边的文字在 SVG 里都很贵，
+// 大图谱开着标签是低配机器卡顿的主要来源；用户仍可手动打开。
+const EDGE_LABEL_AUTO_HIDE = 150
+
+const measureLabel = (text) => {
+  const value = text || ''
+  if (!labelMeasureCtx && typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas')
+    labelMeasureCtx = canvas.getContext('2d')
+    if (labelMeasureCtx) {
+      labelMeasureCtx.font = '9px system-ui, sans-serif'
+    }
+  }
+  const width = labelMeasureCtx
+    ? labelMeasureCtx.measureText(value).width
+    : value.length * 5.4
+  return { width, height: 11 }
+}
 
 const renderGraph = () => {
   if (!graphSvg.value || !props.graphData) return
@@ -462,6 +483,17 @@ const renderGraph = () => {
       }
     })
   })
+
+  // 标签尺寸只测量一次。tick 里对每条边调用 getBBox() 会强制浏览器重新布局。
+  edges.forEach(edge => {
+    const box = measureLabel(edge.name)
+    edge.labelWidth = box.width
+    edge.labelHeight = box.height
+  })
+
+  if (!edgeLabelsTouched.value && edges.length > EDGE_LABEL_AUTO_HIDE) {
+    showEdgeLabels.value = false
+  }
     
   // Color scale
   const colorMap = {}
@@ -469,7 +501,12 @@ const renderGraph = () => {
   const getColor = (type) => colorMap[type] || '#999'
 
   // Simulation - 根据边数量动态调整节点间距
+  // 节点越多，布局越快冷却，避免低配机器连续数百帧重绘 SVG。
+  const nodeCount = nodes.length
+  const alphaDecay = nodeCount > 300 ? 0.09 : nodeCount > 120 ? 0.05 : 0.028
   const simulation = d3.forceSimulation(nodes)
+    .alphaDecay(alphaDecay)
+    .alphaMin(0.03)
     .force('link', d3.forceLink(edges).id(d => d.id).distance(d => {
       // 根据这对节点之间的边数量动态调整距离
       // 基础距离 150，每多一条边增加 40
@@ -751,16 +788,16 @@ const renderGraph = () => {
         .attr('transform', '') // 移除旋转，保持水平
     })
     
-    // 更新边标签背景
-    linkLabelBg.each(function(d, i) {
+    // 更新边标签背景（使用预先测量的文字尺寸，避免每帧 getBBox）
+    linkLabelBg.each(function(d) {
       const mid = getLinkMidpoint(d)
-      const textEl = linkLabels.nodes()[i]
-      const bbox = textEl.getBBox()
+      const width = d.labelWidth || 0
+      const height = d.labelHeight || 11
       d3.select(this)
-        .attr('x', mid.x - bbox.width / 2 - 4)
-        .attr('y', mid.y - bbox.height / 2 - 2)
-        .attr('width', bbox.width + 8)
-        .attr('height', bbox.height + 4)
+        .attr('x', mid.x - width / 2 - 4)
+        .attr('y', mid.y - height / 2 - 2)
+        .attr('width', width + 8)
+        .attr('height', height + 4)
         .attr('transform', '') // 移除旋转
     })
 
@@ -783,9 +820,23 @@ const renderGraph = () => {
   })
 }
 
-watch(() => props.graphData, () => {
+// 只在节点/边数量或末尾元素变化时重绘。深度监听会在模拟刷新时
+// 用一份相同的数据把整张图拆掉重排。
+const graphSignature = computed(() => {
+  const data = props.graphData
+  if (!data) return ''
+  const nodes = data.nodes || []
+  const edges = data.edges || []
+  const lastNode = nodes.length ? (nodes[nodes.length - 1].uuid || nodes.length) : 0
+  const lastEdge = edges.length
+    ? (edges[edges.length - 1].uuid || edges[edges.length - 1].name || edges.length)
+    : 0
+  return `${nodes.length}|${edges.length}|${lastNode}|${lastEdge}`
+})
+
+watch(graphSignature, () => {
   nextTick(renderGraph)
-}, { deep: true })
+})
 
 // 监听边标签显示开关
 watch(showEdgeLabels, (newVal) => {

@@ -1745,8 +1745,12 @@ const formatElapsedTime = computed(() => {
   return `${mins}m ${secs}s`
 })
 
+const MAX_VISIBLE_LOGS = 200
+
 const displayLogs = computed(() => {
-  return agentLogs.value
+  const logs = agentLogs.value
+  if (logs.length <= MAX_VISIBLE_LOGS) return logs
+  return logs.slice(logs.length - MAX_VISIBLE_LOGS)
 })
 
 // Workflow steps overview (status-based, no nested cards)
@@ -2140,6 +2144,10 @@ const fetchConsoleLog = async () => {
       
       if (newLogs.length > 0) {
         consoleLogs.value.push(...newLogs)
+        const maxConsoleLogs = 400
+        if (consoleLogs.value.length > maxConsoleLogs) {
+          consoleLogs.value.splice(0, consoleLogs.value.length - maxConsoleLogs)
+        }
         consoleLogLine.value = res.data.from_line + newLogs.length
         
         nextTick(() => {

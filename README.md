@@ -127,6 +127,30 @@ LLM_MODEL_NAME=qwen-plus
 ZEP_API_KEY=your_zep_api_key
 ```
 
+#### Running on 8GB RAM, or for free
+
+Two things used to make MiroFish heavy: every Twitter round loaded a ~1GB recommendation model into PyTorch, and each platform fired up to 30 LLM requests at once. Both now default to something a small machine can finish.
+
+**Free local model (Ollama).** Install [Ollama](https://ollama.com), pull a small model, and point `.env` at it. No paid API key is required for the LLM. Zep Cloud still stores the graph; its free monthly quota covers short runs.
+
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://127.0.0.1:11434/v1
+LLM_MODEL_NAME=qwen2.5:3b
+```
+
+```bash
+ollama pull qwen2.5:3b
+```
+
+On an 8GB machine, prefer a 3B quantized model over a 7B+ model. A local address automatically lowers LLM concurrency to 2 and extends the request timeout, because a CPU model cannot serve 30 requests at once. Set `LLM_MAX_CONCURRENCY` yourself if you want a different limit.
+
+**Keep simulations small.** In the UI, cap rounds under 40 the first time. Running both Twitter and Reddit doubles memory and model calls; start with one platform if the machine is already swapping.
+
+**Recommendation model.** Twitter now uses OASIS's `random` recommender, which is pure Python. Set `OASIS_TWITTER_RECSYS=twhin-bert` only on a machine with several free gigabytes of RAM and a HuggingFace connection. `twitter` is the middle option (a ~90MB MiniLM model).
+
+**Install size.** On Linux, `uv sync` installs the CPU build of PyTorch instead of the CUDA build, which drops several gigabytes of NVIDIA libraries that this project does not need.
+
 #### 2. Install Dependencies
 
 ```bash
